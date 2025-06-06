@@ -1,6 +1,7 @@
 import { isArray } from '@vue/shared'
 import {
   type VaporComponentInstance,
+  currentInstance,
   isVaporComponent,
   mountComponent,
   unmountComponent,
@@ -186,4 +187,51 @@ export function normalizeBlock(block: Block): Node[] {
     block.anchor && nodes.push(block.anchor)
   }
   return nodes
+}
+
+export function setScopeId(
+  block: Block,
+  scopeId: string | undefined = currentInstance
+    ? currentInstance.type.__scopeId
+    : undefined,
+): void {
+  if (scopeId && block instanceof Element && !block.hasAttribute(scopeId)) {
+    block.setAttribute(scopeId, '')
+  } else if (isVaporComponent(block)) {
+    setScopeId(block.block, scopeId)
+  } else if (isArray(block)) {
+    for (const b of block) {
+      setScopeId(b, scopeId)
+    }
+  } else if (isFragment(block)) {
+    setScopeId(block.nodes, scopeId)
+  }
+}
+
+export function setComponentScopeId(
+  instance: VaporComponentInstance,
+  scopeId: string | undefined = currentInstance
+    ? currentInstance.type.__scopeId
+    : undefined,
+): void {
+  if (scopeId) {
+    setScopeId(instance.block, scopeId)
+  }
+
+  // inherit scopeId from parent component
+  const parent = instance.parent
+  if (parent && parent.type.__scopeId && isSingleBlock(instance)) {
+    // vapor parent
+    if (parent.vapor && (parent as VaporComponentInstance).block === instance) {
+      setScopeId(instance.block, parent.type.__scopeId)
+    }
+    // vdom parent
+    else if (parent.subTree && (parent.subTree.component as any) === instance) {
+      setScopeId(instance.block, parent.vnode!.scopeId!)
+    }
+  }
+}
+
+export function isSingleBlock({ block }: VaporComponentInstance): boolean {
+  return !isArray(block) || (isArray(block) && block.length === 1)
 }
